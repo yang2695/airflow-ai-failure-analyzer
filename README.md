@@ -1,6 +1,8 @@
 # Airflow AI Failure Analyzer
 
-A demo-ready observability companion for Apache Airflow. Paste a failed task log to receive a failure category, severity, plain-language root cause, concise summary, and recommended next steps.
+I built this as a small experiment in making Airflow failures easier to understand.
+
+When a DAG task fails, engineers often have to scan a long log just to find the actual error. This app gives them a faster starting point.
 
 ## Architecture
 
@@ -15,12 +17,19 @@ flowchart LR
   G[Future: OpenAI / Anthropic] -.-> D
 ```
 
-## Features
+## What it does
 
-- Database, Snowflake, S3, memory, and Python exception diagnosis
-- Severity assessment and concrete remediation steps
-- One-click sample failures for quick demos
-- A modular analyzer interface ready for LLM-powered analysis
+Paste an Airflow task log into the app. It looks for a few common failure patterns and returns an explanation of what may have gone wrong.
+
+The current version recognizes:
+
+- Database connection problems
+- Snowflake authentication and warehouse issues
+- S3 access errors and missing objects
+- Out-of-memory failures
+- Python exceptions
+
+The result includes a severity level and suggested next steps.
 
 ## Run locally
 
