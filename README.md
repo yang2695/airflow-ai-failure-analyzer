@@ -111,7 +111,7 @@ docker-compose.yml        Runs the frontend and backend together
 Run the test suite locally:
 
 ```bash
-pytest -q
+python -m pytest -q
 ```
 
 GitHub Actions runs the same tests whenever code is pushed or a pull request is opened.
