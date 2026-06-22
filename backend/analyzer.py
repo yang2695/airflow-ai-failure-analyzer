@@ -6,8 +6,9 @@ interface and return the same AnalysisResponse model.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import re
 
-from backend.schemas import AnalysisResponse
+from backend.schemas import AirflowContext, AnalysisResponse
 
 
 class FailureAnalyzer(ABC):
@@ -54,6 +55,7 @@ class RuleBasedFailureAnalyzer(FailureAnalyzer):
         # breaks ties, preserving the intentional priority of critical errors.
         rule, indicators = max(matches, key=lambda item: len(item[1]))
         confidence = min(95, 62 + (len(indicators) - 1) * 16)
+        context = self._extract_airflow_context(log_text)
         return AnalysisResponse(
             failure_type=rule.failure_type,
             severity=rule.severity,
@@ -63,14 +65,47 @@ class RuleBasedFailureAnalyzer(FailureAnalyzer):
             confidence=confidence,
             matched_indicators=indicators,
             evidence=self._evidence_lines(log_text, indicators),
+            secondary_signals=[candidate.failure_type for candidate, _ in matches if candidate != rule],
+            airflow_context=context,
+            incident_summary=self._incident_summary(rule, context),
         )
 
     @staticmethod
     def _evidence_lines(log_text: str, indicators: list[str]) -> list[str]:
         """Return up to three log lines that visibly support the diagnosis."""
         lines = log_text.splitlines() or [log_text]
-        evidence = [line.strip() for line in lines if any(word in line.lower() for word in indicators)]
+        context_pattern = r"^\s*(dag_id|task_id|run_id|try_number)\s*="
+        evidence = [
+            line.strip()
+            for line in lines
+            if not re.match(context_pattern, line, flags=re.IGNORECASE)
+            and any(word in line.lower() for word in indicators)
+        ]
         return evidence[:3]
+
+    @staticmethod
+    def _extract_airflow_context(log_text: str) -> AirflowContext:
+        """Pull commonly available task metadata from Airflow-style log lines."""
+        def find(pattern: str) -> str | None:
+            match = re.search(pattern, log_text, flags=re.IGNORECASE)
+            return match.group(1) if match else None
+
+        try_number = find(r"(?:try_number|attempt)\s*[=:]\s*(\d+)")
+        return AirflowContext(
+            dag_id=find(r"(?:dag_id|dag)\s*[=:]\s*([\w.-]+)"),
+            task_id=find(r"(?:task_id|task)\s*[=:]\s*([\w.-]+)"),
+            run_id=find(r"run_id\s*[=:]\s*([^\s,]+)"),
+            try_number=int(try_number) if try_number else None,
+            log_line_count=len(log_text.splitlines()) or 1,
+        )
+
+    @staticmethod
+    def _incident_summary(rule: FailureRule, context: AirflowContext) -> str:
+        """Create a short status-update sentence that can be pasted into an incident."""
+        task = f"task `{context.task_id}`" if context.task_id else "an Airflow task"
+        dag = f" in DAG `{context.dag_id}`" if context.dag_id else ""
+        retry = f" on attempt {context.try_number}" if context.try_number else ""
+        return f"{rule.severity} {rule.failure_type} detected for {task}{dag}{retry}."
 
     @staticmethod
     def _unknown_result() -> AnalysisResponse:
@@ -84,6 +119,9 @@ class RuleBasedFailureAnalyzer(FailureAnalyzer):
             confidence=20,
             matched_indicators=[],
             evidence=[],
+            secondary_signals=[],
+            airflow_context=AirflowContext(log_line_count=1),
+            incident_summary="An Airflow task failed, but no known failure signature was detected.",
         )
 
 

@@ -6,11 +6,11 @@ import streamlit as st
 
 API_URL = os.getenv("ANALYZER_API_URL", "http://localhost:8000/analyze")
 SAMPLES = {
-    "Snowflake Authentication Error": "ERROR - Snowflake connection failed: Authentication failed for user AIRFLOW_SERVICE.",
-    "S3 Access Denied": "ERROR - An error occurred (AccessDenied) when calling GetObject: Access Denied. s3://analytics-raw/events.json",
-    "Database Timeout": "ERROR - psycopg2.OperationalError: could not connect to server: Connection timed out. Database unavailable.",
-    "Out Of Memory Error": "ERROR - Container terminated with exit code 137. OOMKilled: task process exceeded memory limit.",
-    "Python Traceback": "ERROR - Task failed with exception\nTraceback (most recent call last):\nKeyError: 'customer_id'",
+    "Snowflake Authentication Error": "dag_id=daily_revenue\ntask_id=load_snowflake\nrun_id=scheduled__2026-06-22\ntry_number=2\nERROR - Snowflake connection failed: Authentication failed for user AIRFLOW_SERVICE.",
+    "S3 Access Denied": "dag_id=customer_events\ntask_id=read_raw_events\nrun_id=manual__2026-06-22\ntry_number=1\nERROR - An error occurred (AccessDenied) when calling GetObject: Access Denied. s3://analytics-raw/events.json",
+    "Database Timeout": "dag_id=warehouse_sync\ntask_id=upsert_postgres\ntry_number=3\nERROR - psycopg2.OperationalError: could not connect to server: Connection timed out. Database unavailable.",
+    "Out Of Memory Error": "dag_id=large_backfill\ntask_id=transform_partition\ntry_number=1\nERROR - Container terminated with exit code 137. OOMKilled: task process exceeded memory limit.",
+    "Python Traceback": "dag_id=customer_dimensions\ntask_id=validate_records\ntry_number=1\nERROR - Task failed with exception\nTraceback (most recent call last):\nKeyError: 'customer_id'",
 }
 
 st.set_page_config(page_title="Airflow AI Failure Analyzer", page_icon="✦", layout="wide")
@@ -20,6 +20,8 @@ if "log_text" not in st.session_state:
     st.session_state.log_text = SAMPLES["Snowflake Authentication Error"]
 if "history" not in st.session_state:
     st.session_state.history = []
+if "action_version" not in st.session_state:
+    st.session_state.action_version = 0
 
 with st.sidebar:
     st.header("Session history")
@@ -45,6 +47,7 @@ if st.button("Analyze failure", type="primary", use_container_width=True):
             st.session_state.analysis = response.json()
             st.session_state.history.insert(0, st.session_state.analysis)
             st.session_state.history = st.session_state.history[:5]
+            st.session_state.action_version += 1
         except requests.RequestException as error:
             st.error(f"Could not reach the analysis API. Start the FastAPI backend first. ({error})")
 if analysis := st.session_state.get("analysis"):
@@ -54,14 +57,26 @@ if analysis := st.session_state.get("analysis"):
     st.markdown("<br>", unsafe_allow_html=True)
     for column, label, value in zip(st.columns(2), ["Root cause", "Summary"], [analysis["root_cause"], analysis["summary"]]):
         column.markdown(f'<div class="card"><div class="eyebrow">{label}</div><div class="value">{value}</div></div>', unsafe_allow_html=True)
+    st.info(analysis["incident_summary"])
+    context = analysis["airflow_context"]
+    with st.expander("Airflow context parsed from this log"):
+        context_columns = st.columns(4)
+        for column, label, value in zip(context_columns, ["DAG", "Task", "Run", "Attempt"], [context["dag_id"] or "Not found", context["task_id"] or "Not found", context["run_id"] or "Not found", str(context["try_number"] or "Not found")]):
+            column.metric(label, value)
+        st.caption(f"Parsed {context['log_line_count']} log line(s).")
     st.markdown("#### Recommended actions")
-    for action in analysis["recommended_actions"]:
-        st.markdown(f"- {action}")
+    for index, action in enumerate(analysis["recommended_actions"]):
+        st.checkbox(action, key=f"action_{st.session_state.action_version}_{index}")
     if analysis["matched_indicators"]:
         st.caption("Matched indicators: " + ", ".join(f"`{item}`" for item in analysis["matched_indicators"]))
+    if analysis["secondary_signals"]:
+        st.warning("Other signals found: " + ", ".join(analysis["secondary_signals"]))
     with st.expander("Evidence found in the log"):
         if analysis["evidence"]:
             st.code("\n".join(analysis["evidence"]), language="text")
         else:
             st.write("No specific evidence lines were identified for this result.")
-    st.download_button("Download analysis as JSON", data=json.dumps(analysis, indent=2), file_name="airflow-failure-analysis.json", mime="application/json")
+    report = f"# Airflow Failure Report\n\n{analysis['incident_summary']}\n\n## Root cause\n{analysis['root_cause']}\n\n## Recommended actions\n" + "\n".join(f"- {action}" for action in analysis["recommended_actions"])
+    download_columns = st.columns(2)
+    download_columns[0].download_button("Download analysis as JSON", data=json.dumps(analysis, indent=2), file_name="airflow-failure-analysis.json", mime="application/json")
+    download_columns[1].download_button("Download incident report", data=report, file_name="airflow-failure-report.md", mime="text/markdown")

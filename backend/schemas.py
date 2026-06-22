@@ -5,6 +5,16 @@ class AnalysisRequest(BaseModel):
     log_text: str = Field(..., min_length=1)
 
 
+class AirflowContext(BaseModel):
+    """Useful execution details parsed from a task log when available."""
+
+    dag_id: str | None = None
+    task_id: str | None = None
+    run_id: str | None = None
+    try_number: int | None = None
+    log_line_count: int
+
+
 class AnalysisResponse(BaseModel):
     """Structured result returned by every analyzer implementation."""
 
@@ -16,3 +26,6 @@ class AnalysisResponse(BaseModel):
     confidence: int = Field(..., ge=0, le=100)
     matched_indicators: list[str]
     evidence: list[str]
+    secondary_signals: list[str]
+    airflow_context: AirflowContext
+    incident_summary: str

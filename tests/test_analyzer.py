@@ -26,3 +26,19 @@ def test_unknown_result_has_low_confidence_and_no_evidence():
     assert result.confidence == 20
     assert result.matched_indicators == []
     assert result.evidence == []
+
+
+def test_extracts_airflow_context_and_incident_summary():
+    log = "dag_id=hourly_orders\ntask_id=load_s3\nrun_id=manual__2026-06-22\ntry_number=3\nERROR: s3 access denied"
+    result = RuleBasedFailureAnalyzer().analyze(log)
+    assert result.airflow_context.dag_id == "hourly_orders"
+    assert result.airflow_context.task_id == "load_s3"
+    assert result.airflow_context.run_id == "manual__2026-06-22"
+    assert result.airflow_context.try_number == 3
+    assert "task `load_s3` in DAG `hourly_orders` on attempt 3" in result.incident_summary
+
+
+def test_exposes_secondary_signals_when_multiple_failure_types_match():
+    result = RuleBasedFailureAnalyzer().analyze("snowflake authentication failed after database timeout")
+    assert result.failure_type == "Snowflake Failure"
+    assert result.secondary_signals == ["Database Connectivity"]
