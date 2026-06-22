@@ -1,4 +1,5 @@
 import os
+import json
 
 import requests
 import streamlit as st
@@ -13,10 +14,21 @@ SAMPLES = {
 }
 
 st.set_page_config(page_title="Airflow AI Failure Analyzer", page_icon="✦", layout="wide")
-st.markdown("""<style>.block-container{max-width:1180px;padding-top:2.5rem}.hero{padding:1.8rem 2rem;border-radius:18px;color:#f8fafc;background:linear-gradient(120deg,#0f172a,#0c4a6e);margin-bottom:1.5rem}.hero h1{margin:0;font-size:2.25rem}.hero p{color:#cbd5e1;margin-bottom:0}.card{border:1px solid #e2e8f0;background:#fff;border-radius:14px;padding:1.1rem 1.25rem;min-height:116px;box-shadow:0 2px 5px rgba(15,23,42,.04)}.eyebrow{color:#64748b;font-size:.78rem;letter-spacing:.08em;font-weight:700;text-transform:uppercase}.value{color:#0f172a;font-size:1.15rem;font-weight:700;margin-top:.35rem}</style>""", unsafe_allow_html=True)
+st.markdown("""<style>.block-container{max-width:1180px;padding-top:2.5rem}.hero{padding:1.8rem 2rem;border-radius:18px;color:#f8fafc;background:linear-gradient(120deg,#0f172a,#0c4a6e);margin-bottom:1.5rem}.hero h1{margin:0;font-size:2.25rem}.hero p{color:#cbd5e1;margin-bottom:0}.card{border:1px solid #e2e8f0;background:#fff;border-radius:14px;padding:1.1rem 1.25rem;min-height:116px;box-shadow:0 2px 5px rgba(15,23,42,.04)}.eyebrow{color:#64748b;font-size:.78rem;letter-spacing:.08em;font-weight:700;text-transform:uppercase}.value{color:#0f172a;font-size:1.15rem;font-weight:700;margin-top:.35rem}.confidence{color:#0369a1;font-weight:700}</style>""", unsafe_allow_html=True)
 st.markdown("""<div class="hero"><h1>Airflow AI Failure Analyzer</h1><p>Turn noisy task logs into a clear diagnosis, impact assessment, and next action.</p></div>""", unsafe_allow_html=True)
 if "log_text" not in st.session_state:
     st.session_state.log_text = SAMPLES["Snowflake Authentication Error"]
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+with st.sidebar:
+    st.header("Session history")
+    st.caption("Recent analyses stay in this browser session only.")
+    for item in st.session_state.history[:5]:
+        st.write(f"**{item['failure_type']}** · {item['severity']}")
+    if st.session_state.history and st.button("Clear history"):
+        st.session_state.history = []
+        st.rerun()
 st.markdown("#### Try a sample failure")
 for column, (label, text) in zip(st.columns(5), SAMPLES.items()):
     if column.button(label, use_container_width=True):
@@ -31,11 +43,13 @@ if st.button("Analyze failure", type="primary", use_container_width=True):
             response = requests.post(API_URL, json={"log_text": log_text}, timeout=10)
             response.raise_for_status()
             st.session_state.analysis = response.json()
+            st.session_state.history.insert(0, st.session_state.analysis)
+            st.session_state.history = st.session_state.history[:5]
         except requests.RequestException as error:
             st.error(f"Could not reach the analysis API. Start the FastAPI backend first. ({error})")
 if analysis := st.session_state.get("analysis"):
     st.markdown("### Analysis result")
-    for column, label, value in zip(st.columns(2), ["Failure type", "Severity"], [analysis["failure_type"], analysis["severity"]]):
+    for column, label, value in zip(st.columns(3), ["Failure type", "Severity", "Confidence"], [analysis["failure_type"], analysis["severity"], f"{analysis['confidence']}%"]):
         column.markdown(f'<div class="card"><div class="eyebrow">{label}</div><div class="value">{value}</div></div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
     for column, label, value in zip(st.columns(2), ["Root cause", "Summary"], [analysis["root_cause"], analysis["summary"]]):
@@ -43,3 +57,11 @@ if analysis := st.session_state.get("analysis"):
     st.markdown("#### Recommended actions")
     for action in analysis["recommended_actions"]:
         st.markdown(f"- {action}")
+    if analysis["matched_indicators"]:
+        st.caption("Matched indicators: " + ", ".join(f"`{item}`" for item in analysis["matched_indicators"]))
+    with st.expander("Evidence found in the log"):
+        if analysis["evidence"]:
+            st.code("\n".join(analysis["evidence"]), language="text")
+        else:
+            st.write("No specific evidence lines were identified for this result.")
+    st.download_button("Download analysis as JSON", data=json.dumps(analysis, indent=2), file_name="airflow-failure-analysis.json", mime="application/json")

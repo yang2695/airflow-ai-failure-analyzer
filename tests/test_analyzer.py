@@ -10,3 +10,19 @@ from backend.analyzer import RuleBasedFailureAnalyzer
 def test_categories(log, category, severity):
     result = RuleBasedFailureAnalyzer().analyze(log)
     assert (result.failure_type, result.severity) == (category, severity)
+
+
+def test_multiple_indicators_increase_confidence_and_return_evidence():
+    log = "ERROR snowflake authentication failed\nwarehouse ANALYTICS_WH is unavailable"
+    result = RuleBasedFailureAnalyzer().analyze(log)
+    assert result.failure_type == "Snowflake Failure"
+    assert result.confidence == 94
+    assert result.matched_indicators == ["snowflake", "warehouse", "authentication failed"]
+    assert result.evidence == ["ERROR snowflake authentication failed", "warehouse ANALYTICS_WH is unavailable"]
+
+
+def test_unknown_result_has_low_confidence_and_no_evidence():
+    result = RuleBasedFailureAnalyzer().analyze("A completely unfamiliar task message")
+    assert result.confidence == 20
+    assert result.matched_indicators == []
+    assert result.evidence == []
