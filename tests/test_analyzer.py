@@ -6,6 +6,9 @@ from backend.analyzer import RuleBasedFailureAnalyzer
     ("connection refused", "Database Connectivity", "High"), ("snowflake authentication failed", "Snowflake Failure", "High"),
     ("s3 access denied", "S3 Failure", "Medium"), ("out of memory oom", "Resource Exhaustion", "Critical"),
     ("Traceback: KeyError", "Application Error", "Medium"), ("unfamiliar message", "Unknown", "Medium"),
+    ("not null constraint violated", "Data Quality Failure", "Medium"),
+    ("HTTP 429 rate limit exceeded", "External Service Failure", "High"),
+    ("ModuleNotFoundError: missing package", "Configuration Failure", "Medium"),
 ])
 def test_categories(log, category, severity):
     result = RuleBasedFailureAnalyzer().analyze(log)
@@ -42,3 +45,13 @@ def test_exposes_secondary_signals_when_multiple_failure_types_match():
     result = RuleBasedFailureAnalyzer().analyze("snowflake authentication failed after database timeout")
     assert result.failure_type == "Snowflake Failure"
     assert result.secondary_signals == ["Database Connectivity"]
+
+
+def test_profiles_log_and_flags_retries_and_sensitive_text():
+    log = "[2026-06-22 10:00:00] WARN - retrying\nday_id=ignored\ntry_number=3\nERROR - OOMKilled. token=do-not-share"
+    result = RuleBasedFailureAnalyzer().analyze(log)
+    assert result.log_profile.error_lines == 1
+    assert result.log_profile.warning_lines == 1
+    assert result.log_profile.first_timestamp == "2026-06-22 10:00:00"
+    assert len(result.risk_flags) == 3
+    assert "Do not retry" in result.retry_guidance

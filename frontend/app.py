@@ -11,6 +11,9 @@ SAMPLES = {
     "Database Timeout": "dag_id=warehouse_sync\ntask_id=upsert_postgres\ntry_number=3\nERROR - psycopg2.OperationalError: could not connect to server: Connection timed out. Database unavailable.",
     "Out Of Memory Error": "dag_id=large_backfill\ntask_id=transform_partition\ntry_number=1\nERROR - Container terminated with exit code 137. OOMKilled: task process exceeded memory limit.",
     "Python Traceback": "dag_id=customer_dimensions\ntask_id=validate_records\ntry_number=1\nERROR - Task failed with exception\nTraceback (most recent call last):\nKeyError: 'customer_id'",
+    "Data Quality Failure": "dag_id=orders_pipeline\ntask_id=validate_order_records\ntry_number=1\nERROR - not null constraint violated: column customer_id contains a null value",
+    "API Rate Limit": "dag_id=crm_sync\ntask_id=fetch_contacts\ntry_number=3\nERROR - HTTP 429 Too Many Requests: rate limit exceeded by external API",
+    "Missing Dependency": "dag_id=monthly_metrics\ntask_id=build_report\ntry_number=1\nERROR - ModuleNotFoundError: No module named 'great_expectations'",
 }
 
 st.set_page_config(page_title="Airflow AI Failure Analyzer", page_icon="✦", layout="wide")
@@ -31,10 +34,16 @@ with st.sidebar:
     if st.session_state.history and st.button("Clear history"):
         st.session_state.history = []
         st.rerun()
+    st.divider()
+    st.subheader("Analyzer coverage")
+    st.caption("Database, Snowflake, S3, resources, data quality, APIs, configuration, and Python errors.")
+    st.info("Paste only logs you are allowed to share. The app flags text that looks like a credential or secret.")
 st.markdown("#### Try a sample failure")
-for column, (label, text) in zip(st.columns(5), SAMPLES.items()):
-    if column.button(label, use_container_width=True):
-        st.session_state.log_text = text
+sample_items = list(SAMPLES.items())
+for start in range(0, len(sample_items), 4):
+    for column, (label, text) in zip(st.columns(4), sample_items[start:start + 4]):
+        if column.button(label, use_container_width=True):
+            st.session_state.log_text = text
 st.markdown("#### Paste Airflow task logs")
 log_text = st.text_area("Paste an Airflow task log", key="log_text", height=265, label_visibility="collapsed")
 if st.button("Analyze failure", type="primary", use_container_width=True):
@@ -58,6 +67,11 @@ if analysis := st.session_state.get("analysis"):
     for column, label, value in zip(st.columns(2), ["Root cause", "Summary"], [analysis["root_cause"], analysis["summary"]]):
         column.markdown(f'<div class="card"><div class="eyebrow">{label}</div><div class="value">{value}</div></div>', unsafe_allow_html=True)
     st.info(analysis["incident_summary"])
+    profile = analysis["log_profile"]
+    profile_columns = st.columns(3)
+    profile_columns[0].metric("Error lines", profile["error_lines"])
+    profile_columns[1].metric("Warning lines", profile["warning_lines"])
+    profile_columns[2].metric("First timestamp", profile["first_timestamp"] or "Not found")
     context = analysis["airflow_context"]
     with st.expander("Airflow context parsed from this log"):
         context_columns = st.columns(4)
@@ -67,10 +81,16 @@ if analysis := st.session_state.get("analysis"):
     st.markdown("#### Recommended actions")
     for index, action in enumerate(analysis["recommended_actions"]):
         st.checkbox(action, key=f"action_{st.session_state.action_version}_{index}")
+    st.markdown("#### Retry guidance")
+    st.write(analysis["retry_guidance"])
     if analysis["matched_indicators"]:
         st.caption("Matched indicators: " + ", ".join(f"`{item}`" for item in analysis["matched_indicators"]))
     if analysis["secondary_signals"]:
         st.warning("Other signals found: " + ", ".join(analysis["secondary_signals"]))
+    if analysis["risk_flags"]:
+        st.markdown("#### Review before sharing or retrying")
+        for flag in analysis["risk_flags"]:
+            st.warning(flag)
     with st.expander("Evidence found in the log"):
         if analysis["evidence"]:
             st.code("\n".join(analysis["evidence"]), language="text")

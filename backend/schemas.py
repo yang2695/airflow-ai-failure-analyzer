@@ -15,6 +15,14 @@ class AirflowContext(BaseModel):
     log_line_count: int
 
 
+class LogProfile(BaseModel):
+    """Operational signals measured directly from the pasted log."""
+
+    error_lines: int
+    warning_lines: int
+    first_timestamp: str | None = None
+
+
 class AnalysisResponse(BaseModel):
     """Structured result returned by every analyzer implementation."""
 
@@ -29,3 +37,6 @@ class AnalysisResponse(BaseModel):
     secondary_signals: list[str]
     airflow_context: AirflowContext
     incident_summary: str
+    retry_guidance: str
+    risk_flags: list[str]
+    log_profile: LogProfile
