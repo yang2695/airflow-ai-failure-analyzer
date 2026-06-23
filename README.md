@@ -1,4 +1,4 @@
-# Airflow AI Failure Analyzer
+# Airflow Failure Analyzer
 
 This is a small tool for checking Airflow task logs.
 
