@@ -24,9 +24,12 @@ The app also reads `dag_id`, `task_id`, `run_id`, and retry attempts when they a
 ## How it works
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "12px"}, "flowchart": {"nodeSpacing": 16, "rankSpacing": 16}} }%%
 flowchart LR
-  A[Log] --> B[Page] --> C[API] --> D[Rules] --> E[Result]
+  A[Airflow DAG task log] --> B[Streamlit page]
+  B -->|POST /analyze| C[FastAPI]
+  C --> D[Rule checks]
+  D --> E[Result]
+  E --> B
 ```
 
 The frontend sends a log to the API. The backend checks it against a small set of rules and returns the result. Each result includes the words that matched, so it is easy to see why the app picked that category.
