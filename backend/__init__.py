@@ -1,1 +1,1 @@
-"""Airflow AI Failure Analyzer backend."""
+"""Airflow Failure Analyzer backend."""

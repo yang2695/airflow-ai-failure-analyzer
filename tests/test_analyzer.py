@@ -9,6 +9,8 @@ from backend.analyzer import RuleBasedFailureAnalyzer
     ("not null constraint violated", "Data Quality Failure", "Medium"),
     ("HTTP 429 rate limit exceeded", "External Service Failure", "High"),
     ("ModuleNotFoundError: missing package", "Configuration Failure", "Medium"),
+    ("Pod evicted with CrashLoopBackOff", "Kubernetes Workload Failure", "High"),
+    ("OSError: No space left on device", "Storage Failure", "High"),
 ])
 def test_categories(log, category, severity):
     result = RuleBasedFailureAnalyzer().analyze(log)
@@ -55,3 +57,12 @@ def test_profiles_log_and_flags_retries_and_sensitive_text():
     assert result.log_profile.first_timestamp == "2026-06-22 10:00:00"
     assert len(result.risk_flags) == 3
     assert "Do not retry" in result.retry_guidance
+
+
+def test_returns_a_stable_fingerprint_and_exception_name():
+    log = "dag_id=reports\nERROR - KeyError: 'customer_id'"
+    first = RuleBasedFailureAnalyzer().analyze(log)
+    second = RuleBasedFailureAnalyzer().analyze(log)
+    assert first.exception_name == "KeyError"
+    assert first.failure_fingerprint == second.failure_fingerprint
+    assert len(first.failure_fingerprint) == 10

@@ -40,3 +40,5 @@ class AnalysisResponse(BaseModel):
     retry_guidance: str
     risk_flags: list[str]
     log_profile: LogProfile
+    exception_name: str | None = None
+    failure_fingerprint: str

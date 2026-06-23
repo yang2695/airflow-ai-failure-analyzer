@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.analyzer import analyzer
 from backend.schemas import AnalysisRequest, AnalysisResponse
 
-app = FastAPI(title="Airflow AI Failure Analyzer API", version="0.1.0")
+app = FastAPI(title="Airflow Failure Analyzer API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:8501"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 
