@@ -105,7 +105,7 @@ backend/                  API route, response models, and rule checks
 frontend/                 Streamlit page
 tests/                    Test suite
 .github/workflows/        GitHub Actions test workflow
-DEMO.md                   One-minute walkthrough
+DEMO.md                   Concise walkthrough
 Dockerfile                Container image
 docker-compose.yml        Starts the page and API together
 ```
