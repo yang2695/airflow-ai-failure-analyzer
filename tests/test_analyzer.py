@@ -77,3 +77,9 @@ def test_single_phrase_on_an_error_line_has_moderate_match_strength():
     result = RuleBasedFailureAnalyzer().analyze("ERROR - no space left on device")
     assert result.confidence == 65
     assert result.match_factors[-1] == "10 points because a match appears on an error line"
+
+
+def test_redacts_sensitive_values_from_evidence_and_counts_them():
+    result = RuleBasedFailureAnalyzer().analyze("ERROR - s3 access denied. token=do-not-share")
+    assert result.redaction_count == 1
+    assert result.evidence == ["ERROR - s3 access denied. token=[REDACTED]"]

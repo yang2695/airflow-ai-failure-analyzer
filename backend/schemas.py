@@ -43,3 +43,4 @@ class AnalysisResponse(BaseModel):
     log_profile: LogProfile
     exception_name: str | None = None
     failure_fingerprint: str
+    redaction_count: int

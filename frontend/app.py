@@ -19,7 +19,7 @@ SAMPLES = {
 }
 
 st.set_page_config(page_title="Airflow Failure Analyzer", page_icon="✦", layout="wide")
-st.markdown("""<style>.block-container{max-width:1180px;padding-top:2.5rem}.hero{padding:1.8rem 2rem;border-radius:18px;color:#f8fafc;background:linear-gradient(120deg,#0f172a,#0c4a6e);margin-bottom:1.5rem}.hero h1{margin:0;font-size:2.25rem}.hero p{color:#cbd5e1;margin-bottom:0}.card{border:1px solid #e2e8f0;background:#fff;border-radius:14px;padding:1.1rem 1.25rem;min-height:116px;box-shadow:0 2px 5px rgba(15,23,42,.04)}.eyebrow{color:#64748b;font-size:.78rem;letter-spacing:.08em;font-weight:700;text-transform:uppercase}.value{color:#0f172a;font-size:1.15rem;font-weight:700;margin-top:.35rem}.confidence{color:#0369a1;font-weight:700}</style>""", unsafe_allow_html=True)
+st.markdown("""<style>.block-container{max-width:1180px;padding-top:2.5rem}.hero{padding:1.8rem 2rem;border-radius:18px;color:#f8fafc;background:linear-gradient(120deg,#0f172a,#0c4a6e);margin-bottom:1.5rem}.hero h1{margin:0;font-size:2.25rem}.hero p{color:#cbd5e1;margin-bottom:0}.card{border:1px solid #e2e8f0;background:#fff;border-radius:14px;padding:1.1rem 1.25rem;min-height:116px;box-shadow:0 2px 5px rgba(15,23,42,.04)}.severity-critical{background:#fff1f2;border-color:#fecdd3}.severity-high{background:#fff7ed;border-color:#fed7aa}.severity-medium{background:#fffbeb;border-color:#fde68a}.eyebrow{color:#64748b;font-size:.78rem;letter-spacing:.08em;font-weight:700;text-transform:uppercase}.value{color:#0f172a;font-size:1.15rem;font-weight:700;margin-top:.35rem}</style>""", unsafe_allow_html=True)
 st.markdown("""<div class="hero"><h1>Airflow Failure Analyzer</h1><p>Paste a task log to see what failed and what to check next.</p></div>""", unsafe_allow_html=True)
 if "log_text" not in st.session_state:
     st.session_state.log_text = SAMPLES["Snowflake Authentication Error"]
@@ -31,8 +31,12 @@ if "action_version" not in st.session_state:
 with st.sidebar:
     st.header("Session history")
     st.caption("This list is cleared when the browser session ends.")
-    for item in st.session_state.history[:5]:
-        st.write(f"**{item['failure_type']}** · {item['severity']}")
+    for index, item in enumerate(st.session_state.history[:5]):
+        label = f"{item['failure_type']} · {item['severity']}"
+        if st.button(label, key=f"history_{item['failure_fingerprint']}_{index}", use_container_width=True):
+            st.session_state.analysis = item
+            st.session_state.action_version += 1
+            st.rerun()
     if st.session_state.history and st.button("Clear history"):
         st.session_state.history = []
         st.rerun()
@@ -67,7 +71,8 @@ if st.button("Check log", type="primary", use_container_width=True):
 if analysis := st.session_state.get("analysis"):
     st.markdown("### Result")
     for column, label, value in zip(st.columns(3), ["Failure type", "Severity", "Match strength"], [analysis["failure_type"], analysis["severity"], f"{analysis['confidence']}%"]):
-        column.markdown(f'<div class="card"><div class="eyebrow">{label}</div><div class="value">{value}</div></div>', unsafe_allow_html=True)
+        extra_class = f" severity-{analysis['severity'].lower()}" if label == "Severity" else ""
+        column.markdown(f'<div class="card{extra_class}"><div class="eyebrow">{label}</div><div class="value">{value}</div></div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
     for column, label, value in zip(st.columns(2), ["Root cause", "Summary"], [analysis["root_cause"], analysis["summary"]]):
         column.markdown(f'<div class="card"><div class="eyebrow">{label}</div><div class="value">{value}</div></div>', unsafe_allow_html=True)
@@ -115,6 +120,8 @@ if analysis := st.session_state.get("analysis"):
         st.markdown("#### Review before sharing or retrying")
         for flag in analysis["risk_flags"]:
             st.warning(flag)
+    if analysis["redaction_count"]:
+        st.warning(f"{analysis['redaction_count']} sensitive value(s) were hidden in matched lines and downloads.")
     with st.expander("Lines that matched"):
         if analysis["evidence"]:
             st.code("\n".join(analysis["evidence"]), language="text")

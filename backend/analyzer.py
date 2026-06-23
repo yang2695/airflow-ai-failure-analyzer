@@ -29,6 +29,11 @@ class FailureRule:
 class RuleBasedFailureAnalyzer(FailureAnalyzer):
     """Checks logs against known failure patterns."""
 
+    SENSITIVE_VALUE_PATTERN = re.compile(
+        r"\b(password|token|api[_-]?key|aws_secret_access_key)\s*([=:])\s*([^\s,;]+)",
+        re.IGNORECASE,
+    )
+
     RULES = (
         FailureRule(("out of memory", "oom", "killed process"), "Resource Exhaustion", "Critical", "The task was terminated because its runtime ran out of memory.", "The worker, container, or process exceeded its available memory limit.", ["Increase the task or worker memory allocation.", "Process data in smaller batches and release large intermediate objects.", "Review task memory metrics to size the workload appropriately."]),
         FailureRule(("snowflake", "warehouse", "authentication failed"), "Snowflake Failure", "High", "The task failed while connecting to or running work in Snowflake.", "Snowflake credentials, warehouse availability, or account configuration prevented execution.", ["Verify the Airflow Snowflake connection credentials and account URL.", "Confirm the configured warehouse is running and the role has required privileges.", "Rotate expired credentials or update the connection secret if needed."]),
@@ -76,6 +81,7 @@ class RuleBasedFailureAnalyzer(FailureAnalyzer):
             log_profile=self._log_profile(log_text),
             exception_name=self._exception_name(log_text),
             failure_fingerprint=self._fingerprint(rule.failure_type, indicators),
+            redaction_count=self._redaction_count(log_text),
         )
 
     @staticmethod
@@ -84,12 +90,20 @@ class RuleBasedFailureAnalyzer(FailureAnalyzer):
         lines = log_text.splitlines() or [log_text]
         context_pattern = r"^\s*(dag_id|task_id|run_id|try_number)\s*="
         evidence = [
-            line.strip()
+            RuleBasedFailureAnalyzer._redact_line(line.strip())
             for line in lines
             if not re.match(context_pattern, line, flags=re.IGNORECASE)
             and any(word in line.lower() for word in indicators)
         ]
         return evidence[:3]
+
+    @classmethod
+    def _redact_line(cls, line: str) -> str:
+        return cls.SENSITIVE_VALUE_PATTERN.sub(r"\1\2[REDACTED]", line)
+
+    @classmethod
+    def _redaction_count(cls, log_text: str) -> int:
+        return len(cls.SENSITIVE_VALUE_PATTERN.findall(log_text))
 
     @staticmethod
     def _match_strength(indicators: list[str], evidence: list[str]) -> tuple[int, list[str]]:
@@ -186,6 +200,7 @@ class RuleBasedFailureAnalyzer(FailureAnalyzer):
             log_profile=RuleBasedFailureAnalyzer._log_profile(log_text),
             exception_name=RuleBasedFailureAnalyzer._exception_name(log_text),
             failure_fingerprint="unknown",
+            redaction_count=RuleBasedFailureAnalyzer._redaction_count(log_text),
         )
 
 
