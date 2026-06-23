@@ -55,7 +55,8 @@ class RuleBasedFailureAnalyzer(FailureAnalyzer):
 
         # More matched indicators win. Rule order breaks a tie.
         rule, indicators = max(matches, key=lambda item: len(item[1]))
-        confidence = min(95, 62 + (len(indicators) - 1) * 16)
+        evidence = self._evidence_lines(log_text, indicators)
+        confidence, match_factors = self._match_strength(indicators, evidence)
         context = self._extract_airflow_context(log_text)
         return AnalysisResponse(
             failure_type=rule.failure_type,
@@ -64,8 +65,9 @@ class RuleBasedFailureAnalyzer(FailureAnalyzer):
             root_cause=rule.root_cause,
             recommended_actions=rule.recommended_actions,
             confidence=confidence,
+            match_factors=match_factors,
             matched_indicators=indicators,
-            evidence=self._evidence_lines(log_text, indicators),
+            evidence=evidence,
             secondary_signals=[candidate.failure_type for candidate, _ in matches if candidate != rule],
             airflow_context=context,
             incident_summary=self._incident_summary(rule, context),
@@ -88,6 +90,16 @@ class RuleBasedFailureAnalyzer(FailureAnalyzer):
             and any(word in line.lower() for word in indicators)
         ]
         return evidence[:3]
+
+    @staticmethod
+    def _match_strength(indicators: list[str], evidence: list[str]) -> tuple[int, list[str]]:
+        """Score a match from the number of phrases and their log context."""
+        phrase_points = min(len(indicators), 3) * 15
+        factors = ["40 points for a known failure pattern", f"{phrase_points} points for {len(indicators)} matching phrase(s)"]
+        error_context = any(re.search(r"\b(error|exception|failed)\b", line, re.IGNORECASE) for line in evidence)
+        if error_context:
+            factors.append("10 points because a match appears on an error line")
+        return min(95, 40 + phrase_points + (10 if error_context else 0)), factors
 
     @staticmethod
     def _extract_airflow_context(log_text: str) -> AirflowContext:
@@ -163,6 +175,7 @@ class RuleBasedFailureAnalyzer(FailureAnalyzer):
             root_cause="No recognized signature was found in the provided task log.",
             recommended_actions=["Review the final error lines and surrounding task context.", "Check upstream task status, connections, and recent deployment changes.", "Add the pattern to the rule set if it appears again."],
             confidence=20,
+            match_factors=["No known failure pattern was found"],
             matched_indicators=[],
             evidence=[],
             secondary_signals=[],

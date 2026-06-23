@@ -21,7 +21,12 @@ def test_multiple_indicators_increase_confidence_and_return_evidence():
     log = "ERROR snowflake authentication failed\nwarehouse ANALYTICS_WH is unavailable"
     result = RuleBasedFailureAnalyzer().analyze(log)
     assert result.failure_type == "Snowflake Failure"
-    assert result.confidence == 94
+    assert result.confidence == 95
+    assert result.match_factors == [
+        "40 points for a known failure pattern",
+        "45 points for 3 matching phrase(s)",
+        "10 points because a match appears on an error line",
+    ]
     assert result.matched_indicators == ["snowflake", "warehouse", "authentication failed"]
     assert result.evidence == ["ERROR snowflake authentication failed", "warehouse ANALYTICS_WH is unavailable"]
 
@@ -66,3 +71,9 @@ def test_returns_a_stable_fingerprint_and_exception_name():
     assert first.exception_name == "KeyError"
     assert first.failure_fingerprint == second.failure_fingerprint
     assert len(first.failure_fingerprint) == 10
+
+
+def test_single_phrase_on_an_error_line_has_moderate_match_strength():
+    result = RuleBasedFailureAnalyzer().analyze("ERROR - no space left on device")
+    assert result.confidence == 65
+    assert result.match_factors[-1] == "10 points because a match appears on an error line"

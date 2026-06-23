@@ -32,6 +32,7 @@ class AnalysisResponse(BaseModel):
     root_cause: str
     recommended_actions: list[str]
     confidence: int = Field(..., ge=0, le=100)
+    match_factors: list[str]
     matched_indicators: list[str]
     evidence: list[str]
     secondary_signals: list[str]

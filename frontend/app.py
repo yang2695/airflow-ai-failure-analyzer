@@ -79,6 +79,9 @@ if analysis := st.session_state.get("analysis"):
     if repeat_count > 1:
         details.append(f"Seen {repeat_count} times in this session")
     st.caption(" · ".join(details))
+    with st.expander("How match strength is calculated"):
+        for factor in analysis["match_factors"]:
+            st.write(f"- {factor}")
     profile = analysis["log_profile"]
     profile_columns = st.columns(3)
     profile_columns[0].metric("Error lines", profile["error_lines"])
@@ -91,8 +94,16 @@ if analysis := st.session_state.get("analysis"):
             column.metric(label, value)
         st.caption(f"Parsed {context['log_line_count']} log line(s).")
     st.markdown("#### What to check")
+    action_states = []
     for index, action in enumerate(analysis["recommended_actions"]):
-        st.checkbox(action, key=f"action_{st.session_state.action_version}_{index}")
+        checked = st.checkbox(action, key=f"action_{st.session_state.action_version}_{index}")
+        action_states.append((action, checked))
+    completed_actions = sum(checked for _, checked in action_states)
+    total_actions = len(action_states)
+    st.progress(completed_actions / total_actions if total_actions else 0)
+    st.caption(f"{completed_actions} of {total_actions} items marked complete")
+    if total_actions and completed_actions == total_actions:
+        st.success("All items are marked complete for this session.")
     st.markdown("#### Before retrying")
     st.write(analysis["retry_guidance"])
     if analysis["matched_indicators"]:
@@ -108,7 +119,8 @@ if analysis := st.session_state.get("analysis"):
             st.code("\n".join(analysis["evidence"]), language="text")
         else:
             st.write("No specific evidence lines were identified for this result.")
-    report = f"# Airflow Failure Report\n\n{analysis['incident_summary']}\n\nReference: {analysis['failure_fingerprint']}\n\n## Root cause\n{analysis['root_cause']}\n\n## What to check\n" + "\n".join(f"- {action}" for action in analysis["recommended_actions"])
+    checklist = "\n".join(f"- [{'x' if checked else ' '}] {action}" for action, checked in action_states)
+    report = f"# Airflow Failure Report\n\n{analysis['incident_summary']}\n\nReference: {analysis['failure_fingerprint']}\n\n## Root cause\n{analysis['root_cause']}\n\n## What to check\n{checklist}"
     download_columns = st.columns(2)
     download_columns[0].download_button("Download analysis as JSON", data=json.dumps(analysis, indent=2), file_name="airflow-failure-analysis.json", mime="application/json")
     download_columns[1].download_button("Download incident report", data=report, file_name="airflow-failure-report.md", mime="text/markdown")
