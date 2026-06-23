@@ -1,6 +1,6 @@
 # Demo guide
 
-This is a short walkthrough for showing the project in about one minute.
+This is a short walkthrough for showing the project.
 
 1. Start the app and open `http://localhost:8501`.
 2. Click **Snowflake Authentication Error** and then **Check log**.
