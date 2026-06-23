@@ -2,7 +2,7 @@
 
 This is a small tool for checking Airflow task logs.
 
-Paste in a failed task log. The app looks for known failure patterns, shows the matching lines, and gives you a short list of things to check.
+Paste in a failed task log. The app checks for known failure patterns, shows the lines that matched, and gives you a short list of things to check.
 
 ![Airflow Failure Analyzer interface](screenshots/airflow-failure-analysis.png)
 
@@ -36,12 +36,15 @@ The frontend sends a log to the API. The backend checks it against a small set o
 
 ## Included features
 
-- Match strength based on the number of matching phrases
+- Color-coded severity cards
+- Match strength with a short explanation of the score
 - Lines from the log that support the result
-- Parsed task details and a short status note
+- Parsed DAG, task, run, and retry details
+- A checklist with completion progress
 - Retry notes and warnings for repeated retries
 - A reference ID for grouping similar failures
-- Session history and simple session counts
+- Clickable session history and session counts
+- Common secret values hidden in matched lines and downloads
 - Downloadable JSON and Markdown reports
 - Example logs for a quick demo
 
@@ -89,7 +92,11 @@ try_number=2
 ERROR - Snowflake connection failed: Authentication failed for user AIRFLOW_SERVICE.
 ```
 
-This returns a Snowflake result, the phrases that matched, task details, and checks for the connection, credentials, warehouse, and permissions.
+This returns a Snowflake result, a color-coded severity card, the phrases that matched, task details, and checks for the connection, credentials, warehouse, and permissions.
+
+## Demo
+
+See [DEMO.md](DEMO.md) for a short walkthrough of the app.
 
 ## Project files
 
