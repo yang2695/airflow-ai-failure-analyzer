@@ -91,7 +91,8 @@ if analysis := st.session_state.get("analysis"):
     with st.expander("Task details found in this log"):
         context_columns = st.columns(4)
         for column, label, value in zip(context_columns, ["DAG", "Task", "Run", "Attempt"], [context["dag_id"] or "Not found", context["task_id"] or "Not found", context["run_id"] or "Not found", str(context["try_number"] or "Not found")]):
-            column.metric(label, value)
+            column.caption(label)
+            column.write(value)
         st.caption(f"Parsed {context['log_line_count']} log line(s).")
     st.markdown("#### What to check")
     action_states = []
